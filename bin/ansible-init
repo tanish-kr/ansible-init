@@ -1,0 +1,134 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+# -*- mode: python -*-
+# vi: set ft=python :
+
+import os, argparse
+
+def write(file_name, val):
+  if os.path.exists(file_name) == False:
+    f = open(file_name, "w")
+    f.write(val)
+    f.close()
+
+def generate_vagrant(args):
+  vagrant_str = """\
+# coding : utf-8
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+  config.vm.box = "{0}"
+  config.vm.network "private_network", ip: "{1}"
+  config.vm.hostname = "{2}-server"
+
+  # virtualbox customize
+  config.vm.provider "virtualbox" do |v|
+    v.name = "{2}-server"
+    v.memory = {3}
+    v.cpus = {4}
+  end
+
+  # provision ansible
+  config.vm.provision "ansible" do |ansible|
+    ansible.extra_vars = {{ user: "vagrant" }}
+    ansible.playbook = "{2}-playbook.yml"
+  end
+
+end
+""".format(args["box_name"], args["ip_addr"], args["playbook_name"], args["memory"], args["cpu"])
+
+  write("Vagrantfile", vagrant_str)
+
+def generate_main_playbook(playbook_name):
+  
+  main_playbook_str = """\
+---
+- hosts: all
+  sudo: yes
+  user: '{{{{ user }}}}'
+
+  roles:
+    - {0}
+""".format(playbook_name)
+
+  write("{0}-playbook.yml".format(playbook_name), main_playbook_str)
+
+def validate(args):
+  if args["box_name"] is None:
+    args["box_name"] = "bento/centos/7.1"
+
+  if args["ip_addr"] is None:
+    args["ip_addr"] = "192.168.33.101"
+
+  if args["memory"] is None:
+    args["memory"] = 2048
+
+  if args["cpu"] is None:
+    args["cpu"] = 1
+
+  return args
+
+def generate_servers():
+  servers_str = """
+  [www]
+  www.example.com
+"""
+  write("production", servers_str)
+  write("staging", servers_str)
+
+def touch(path, filename=None):
+
+  if os.path.exists(path) == False:
+    os.makedirs(path)
+
+  if filename is None:
+    write("{0}/.gitkeep".format(path), "")
+  else:
+    write("{0}/{1}".format(path, filename), "")
+
+def make_layouts(playbook_name):
+  touch("group_vars")
+  touch("host_vars")
+  touch("library")
+  touch("filter_plugins")
+  touch("roles/{0}/tasks".format(playbook_name), "main.yml")
+  touch("roles/{0}/handlers".format(playbook_name), "main.yml")
+  touch("roles/{0}/templates".format(playbook_name), "template.conf.j2")
+  touch("roles/{0}/files".format(playbook_name))
+  touch("roles/{0}/vars".format(playbook_name), "main.yml")
+  touch("roles/{0}/defaults".format(playbook_name), "main.yml")
+  touch("roles/{0}/meta".format(playbook_name), "main.yml")
+
+def main():
+  parser = argparse.ArgumentParser(description="ansible template generate")
+  parser.add_argument("-p", "--playbook_name", help="playbook name", required=True)
+  parser.add_argument("-b", "--box_name", help="vagrant box name")
+  parser.add_argument("-i", "--ip_addr", help="private ip address")
+  parser.add_argument("-m", "--memory", help="box memory", type=int)
+  parser.add_argument("-c", "--cpu", help="box cpu", type=int)
+  args = parser.parse_args()
+
+  if not args:
+    parser.error("requires keyword")
+    parser.print_help()
+    exit()
+
+  args = validate(vars(args))
+
+  generate_vagrant(args)
+  print "complete generate Vagrantfile"
+
+  generate_main_playbook(args["playbook_name"])
+  print "complete generate main playbook.yml"
+
+  generate_servers
+  print "complete generate servers sample file"
+
+  make_layouts(args["playbook_name"])
+  print "complete ansible layouts"
+
+  os.system("serverspec-init")
+
+if __name__ == "__main__":
+  main()
