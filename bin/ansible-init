@@ -56,7 +56,7 @@ def generate_main_playbook(playbook_name):
 
 def validate(args):
   if args["box_name"] is None:
-    args["box_name"] = "bento/centos/7.1"
+    args["box_name"] = "bento/centos-7.1"
 
   if args["ip_addr"] is None:
     args["ip_addr"] = "192.168.33.101"
